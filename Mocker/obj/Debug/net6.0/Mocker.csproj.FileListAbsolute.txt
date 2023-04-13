@@ -1,0 +1,12 @@
+C:\Projetos Git\Mocker\Mocker\bin\Debug\net6.0\Mocker.deps.json
+C:\Projetos Git\Mocker\Mocker\bin\Debug\net6.0\Mocker.dll
+C:\Projetos Git\Mocker\Mocker\bin\Debug\net6.0\Mocker.pdb
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\Mocker.csproj.AssemblyReference.cache
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\Mocker.GeneratedMSBuildEditorConfig.editorconfig
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\Mocker.AssemblyInfoInputs.cache
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\Mocker.AssemblyInfo.cs
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\Mocker.csproj.CoreCompileInputs.cache
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\Mocker.dll
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\refint\Mocker.dll
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\Mocker.pdb
+C:\Projetos Git\Mocker\Mocker\obj\Debug\net6.0\ref\Mocker.dll
