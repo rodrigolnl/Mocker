@@ -10,7 +10,10 @@ namespace Mocker
         internal Preset? Preset { get; set; }
         internal dynamic? Value { get; set; }
         internal string? Format { get; set; }
-        internal PropertyInfo? PropertySource { get; set; }
+        internal Func<object, dynamic>? PropertySource { get; set; }
         internal Operator? Operator { get; set; }
+        internal If? Conditional { get; set; }
+        internal Func<object, bool>? Statement { get; set; }
+
     }
 }

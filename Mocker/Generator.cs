@@ -4,6 +4,7 @@ using System.Text;
 using Mocker.Interfaces;
 using Mocker.Enums;
 using Mocker.Data;
+using System.Collections;
 
 namespace Mocker
 {
@@ -20,20 +21,24 @@ namespace Mocker
 
         private readonly IBaseMap Map;
         private readonly PresetData GeneratorData;
-        const int max_array_items = 20;
-        const int max_list_items = 50;
+        private readonly int max_array_items = 20;
+        private readonly int max_list_items = 50;
 
         #endregion [ Constants | ReadOnly ]
 
         #region [ Constructor ]
-        public Generator(IBaseMap map)
+        public Generator(IBaseMap map, int maxIterables = 50)
         {
+            max_array_items = maxIterables;
+            max_list_items = maxIterables;
             using (var json_stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Mocker.Data.generator_data.json"))
                 GeneratorData = JsonSerializer.Deserialize<PresetData>(json_stream) ?? new PresetData();
             Map = map;
         }
-        public Generator()
+        public Generator(int maxIterables = 50)
         {
+            max_array_items = maxIterables;
+            max_list_items = maxIterables;
             using (var json_stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Mocker.Data.generator_data.json"))
                 GeneratorData = JsonSerializer.Deserialize<PresetData>(json_stream) ?? new PresetData();
             Map = new BaseMap();
@@ -45,8 +50,9 @@ namespace Mocker
 
         public void Populate(object obj, int? seed = null)
         {
-            Rnd = Rnd == null ? (seed == null ? new Random() : new Random((int) seed)) : Rnd;
-            var ruleSet = Map.RuleSets.Where(x => x.Type == obj.GetType()).FirstOrDefault();
+            Rnd = Rnd == null ? (seed == null ? new Random() : new Random((int)seed)) : Rnd;
+            IRuleSet ruleSet = null;
+            ruleSet = Map.RuleSets.Where(x => x.Type == obj.GetType()).FirstOrDefault();
             var allRules = ruleSet == null ? new List<Rule>() : ruleSet.Rules;
 
             PropertyInfo[] properties = obj.GetType().GetProperties();
@@ -56,9 +62,9 @@ namespace Mocker
                 var propertyRules = allRules.Where(x => x.Property == property).ToList();
                 var setPropertyRules = propertyRules.Where(x => x.RuleType == RuleType.SetProperty).ToList();
                 var setPropertyFromPropertyRules = propertyRules.Where(x => x.RuleType == RuleType.SetPropertyFromProperty).ToList();
-                var conditionalRules = propertyRules.Where(x => x.RuleType == RuleType.Conditional).ToList();
-                
-                
+                var conditionalRules = propertyRules.Where(x => x.RuleType == RuleType.Range).ToList();
+
+
                 long? min = null, max = null;
                 dynamic pool = null;
                 if (conditionalRules.Any())
@@ -96,9 +102,23 @@ namespace Mocker
             foreach (var rule in allRules.Where(x => x.RuleType == RuleType.SetPropertyFromProperty).ToList())
                 SetPropertyFromProperty(obj, rule.Property, rule.PropertySource);
 
-            foreach (var rule in allRules.Where(x => x.RuleType == RuleType.PostExecution).ToList())
+            foreach (var rule in allRules.Where(x => x.RuleType == RuleType.ConditionalStatement).ToList())
             {
-                if (rule.Format != null)
+                if (rule.Statement(obj) == (rule.Conditional == If.True ? true : false))
+                {
+                    if (rule.Value != null)
+                        SetValue(obj, rule.Property, rule.Value);
+                    else if (rule.Preset != null)
+                        SetPreset(obj, rule.Property, rule.Preset);
+                    else if (rule.PropertySource != null)
+                        SetPropertyFromProperty(obj, rule.Property, rule.PropertySource);
+                }
+            }
+
+
+            foreach (var rule in allRules.Where(x => x.RuleType == RuleType.Format).ToList())
+            {
+                if (rule.Format != null && (rule.Statement == null || rule.Statement(obj) == (rule.Conditional == If.True ? true : false)))
                 {
                     if (rule.Property.PropertyType == typeof(string))
                         SetFormat(obj, rule.Property, rule.Format);
@@ -119,9 +139,9 @@ namespace Mocker
             Rnd = Rnd == null ? (seed == null ? new Random() : new Random((int)seed)) : Rnd;
             var type = typeof(T);
             var numEntries = (new Random()).Next(max_list_items);
-            for(var i = 0; i < numEntries; i++)
+            for (var i = 0; i < numEntries; i++)
             {
-                if(type.BaseType == typeof(object) && type != typeof(string))
+                if (type.BaseType == typeof(object) && type != typeof(string))
                 {
                     var instance = (T)Activator.CreateInstance(type);
                     Populate(instance);
@@ -149,72 +169,133 @@ namespace Mocker
             dynamic? content = null;
             if (type == null)
                 throw new Exception();
-            if (type.IsArray)
+            var isList = IsList(type);
+            if (type.IsArray || isList)
             {
-                if (type.GetElementType() == typeof(int))
+                if (type.IsArray)
+                    type = type.GetElementType();
+                else
+                    type = type.GenericTypeArguments[0];
+
+                if (type == typeof(int))
                 {
                     var array = new int[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = rnd.Next();
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() == typeof(long))
+                else if (type == typeof(long))
                 {
                     var array = new long[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = rnd.NextInt64();
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() == typeof(float))
+                else if (type == typeof(float))
                 {
                     var array = new float[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = (float)rnd.NextDouble();
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() == typeof(double))
+                else if (type == typeof(double))
                 {
                     var array = new double[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = rnd.NextDouble();
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() == typeof(bool))
+                else if (type == typeof(bool))
                 {
                     var array = new bool[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = rnd.Next(2) == 1;
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() == typeof(char))
+                else if (type == typeof(char))
                 {
                     var abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
                     var array = new char[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = abc[rnd.Next(26)];
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() == typeof(string))
+                else if (type == typeof(string))
                 {
                     var array = new string[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = $"String.{i}";
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() == typeof(decimal))
+                else if (type == typeof(decimal))
                 {
                     var array = new decimal[rnd.Next(max_array_items)];
                     for (int i = 0; i < array.Length; i++)
                         array[i] = (decimal)(rnd.NextDouble() + rnd.Next(100));
-                    content = array;
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
                 }
-                else if (type.GetElementType() != null && type.GetElementType().BaseType == typeof(Enum))
+                else if (type != null && type.BaseType == typeof(Enum))
                 {
-                    var array = Array.CreateInstance(type.GetElementType(), rnd.Next(max_array_items));
-                    Array enum_values = Enum.GetValues(type.GetElementType());
+                    var array = Array.CreateInstance(type, rnd.Next(max_array_items));
+                    Array enum_values = Enum.GetValues(type);
                     for (int i = 0; i < array.Length; i++)
                         array.SetValue(enum_values.GetValue(rnd.Next(enum_values.Length)), i);
                     content = array;
+                }
+                else if (type == typeof(DateTime) || Nullable.GetUnderlyingType(type) == typeof(DateTime))
+                {
+                    var array = new DateTime[rnd.Next(max_array_items)];
+                    for (int i = 0; i < array.Length; i++)
+                        array[i] = new DateTime(rnd.NextInt64(min ?? 628000000000000000, max ?? 645000000000000000));
+                    if (isList)
+                        content = array.ToList();
+                    else
+                        content = array;
+                }
+                else if (type.BaseType == typeof(object))
+                {
+                    var array = new dynamic[rnd.Next(max_array_items)];
+                    for (int i = 0; i < array.Length; i++)
+                    {
+                        var new_obj = Activator.CreateInstance(type);
+                        Populate(new_obj);
+                        array[i] = new_obj;
+                    }
+
+                    if (isList)
+                    {
+                        Type concreteListType = typeof(List<>).MakeGenericType(type);
+                        IList list = Activator.CreateInstance(concreteListType) as IList;
+                        foreach (var item in array)
+                            list.Add(item);
+                        content = list;
+                    }
+                    else
+                        content = array;
                 }
             }
             else
@@ -226,7 +307,7 @@ namespace Mocker
                 else if (type == typeof(float) || Nullable.GetUnderlyingType(type) == typeof(float))
                     content = (float)(rnd.Next() + rnd.NextDouble());
                 else if (type == typeof(double) || Nullable.GetUnderlyingType(type) == typeof(double))
-                    content = rnd.Next((int?)min ?? 0, (int?)max -1 ?? int.MaxValue-1) + rnd.NextDouble();
+                    content = rnd.Next((int?)min ?? 0, (int?)max - 1 ?? int.MaxValue - 1) + rnd.NextDouble();
                 else if (type == typeof(bool) || Nullable.GetUnderlyingType(type) == typeof(bool))
                     content = rnd.Next(2) == 1;
                 else if (type == typeof(char) || Nullable.GetUnderlyingType(type) == typeof(char))
@@ -239,13 +320,16 @@ namespace Mocker
                     content = Enum.GetValues(type).GetValue(rnd.Next(Enum.GetValues(type).Length));
                 else if (type == typeof(DateTime) || Nullable.GetUnderlyingType(type) == typeof(DateTime))
                 {
-                    
                     content = new DateTime(rnd.NextInt64(min ?? 628000000000000000, max ?? 645000000000000000));
                 }
                 else if (type.BaseType == typeof(object))
-                    Populate(property.GetValue(obj));
+                {
+                    content = Activator.CreateInstance(type);
+                    Populate(content);
+                }
+
             }
-            if(property != null && obj != null)
+            if (property != null && obj != null)
                 if (property.CanWrite)
                     property.SetValue(obj, content);
             return content;
@@ -504,13 +588,16 @@ namespace Mocker
                 for (var i = 0; i < format_dec.Length; i++)
                     texto_formatado += text_dec[i];
             if (property.CanWrite)
-                property.SetValue(obj,signal + texto_formatado);
+                property.SetValue(obj, signal + texto_formatado);
         }
-        private void SetPropertyFromProperty(object obj, PropertyInfo property, PropertyInfo sourceProperty)
+        private void SetPropertyFromProperty(object obj, PropertyInfo property, Func<object, dynamic> sourceProperty)
         {
             if (property.CanWrite)
-                property.SetValue(obj, sourceProperty.GetValue(obj));
+                property.SetValue(obj, sourceProperty(obj));
         }
+
+        private bool IsList(Type type) => (type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(List<>) || type.GetGenericTypeDefinition() == typeof(IList<>)));
+
 
         #endregion [ Private ]
     }

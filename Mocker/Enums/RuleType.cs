@@ -4,7 +4,8 @@
     {
         SetProperty,
         SetPropertyFromProperty,
-        PostExecution,
-        Conditional
+        Format,
+        Range,
+        ConditionalStatement
     }
 }
